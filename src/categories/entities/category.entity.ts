@@ -15,6 +15,9 @@ export class Category {
     @Column({ nullable: true })
     description: string;
 
+    @Column({ default: 0 })
+    order: number;
+
     @CreateDateColumn()
     createdAt: Date;
 

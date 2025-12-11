@@ -12,13 +12,25 @@ export class MenusService {
     private menuRepository: Repository<Menu>,
   ) { }
 
-  create(createMenuDto: CreateMenuDto) {
-    const menu = this.menuRepository.create(createMenuDto);
+  async create(createMenuDto: CreateMenuDto) {
+    if (!createMenuDto.order) {
+      const parentCondition = createMenuDto.parentId ? { id: createMenuDto.parentId } : IsNull();
+      const lastItem = await this.menuRepository.findOne({
+        where: { parent: parentCondition },
+        order: { order: 'DESC' },
+      });
+      createMenuDto.order = lastItem ? lastItem.order + 1 : 1; // Start at 1 if no items
+    }
+    const parent = createMenuDto.parentId ? { id: createMenuDto.parentId } : undefined;
+    const menu = this.menuRepository.create({
+      ...createMenuDto,
+      parent
+    });
     return this.menuRepository.save(menu);
   }
 
   findAll() {
-    return this.menuRepository.find();
+    return this.menuRepository.find({ relations: ['parent'] });
   }
 
   getTree() {
@@ -41,6 +53,48 @@ export class MenusService {
 
   remove(id: string) {
     return this.menuRepository.delete(id);
+  }
+
+  async reorder(items: { id: string; order: number }[]) {
+    // Validate hierarchy if needed, but for now just update orders
+    // This assumes the frontend sends valid (id, order) pairs within their respective siblings
+    await this.menuRepository.manager.transaction(async (transactionalEntityManager) => {
+      for (const item of items) {
+        await transactionalEntityManager.update(Menu, item.id, { order: item.order });
+      }
+    });
+    return { success: true };
+  }
+
+  async updateAutoIncrement() {
+    // Find roots
+    const roots = await this.menuRepository.find({
+      where: { parent: IsNull() },
+      order: { label: 'ASC' }
+    });
+
+    let rootOrder = 1;
+    for (const root of roots) {
+      root.order = rootOrder++;
+      await this.menuRepository.save(root);
+      await this.updateChildrenOrder(root);
+    }
+    return { message: 'Menu Auto-increment updated' };
+  }
+
+  private async updateChildrenOrder(parent: Menu) {
+    const children = await this.menuRepository.find({
+      where: { parent: { id: parent.id } },
+      order: { label: 'ASC' }
+    });
+
+    let childOrder = 1;
+    for (const child of children) {
+      child.order = childOrder++;
+      await this.menuRepository.save(child);
+      // Recurse if deeper levels exist (Menu supports generic depth)
+      await this.updateChildrenOrder(child);
+    }
   }
 
   async seed() {

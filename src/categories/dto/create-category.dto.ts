@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsNumber } from 'class-validator';
 
 export class CreateCategoryDto {
     @IsString()
@@ -12,4 +12,11 @@ export class CreateCategoryDto {
     @IsString()
     @IsOptional()
     description?: string;
+
+    @IsNumber()
+    @IsOptional()
+    order?: number;
+
+    @IsOptional()
+    parent?: { id: string };
 }

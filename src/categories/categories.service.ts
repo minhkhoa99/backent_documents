@@ -12,13 +12,21 @@ export class CategoriesService {
     private categoryRepository: Repository<Category>,
   ) { }
 
-  create(createCategoryDto: CreateCategoryDto) {
+  async create(createCategoryDto: CreateCategoryDto) {
+    if (!createCategoryDto.order) {
+      const parentCondition = createCategoryDto.parent ? { id: createCategoryDto.parent.id } : IsNull();
+      const lastItem = await this.categoryRepository.findOne({
+        where: { parent: parentCondition },
+        order: { order: 'DESC' },
+      });
+      createCategoryDto.order = lastItem ? lastItem.order + 1 : 1;
+    }
     const category = this.categoryRepository.create(createCategoryDto);
     return this.categoryRepository.save(category);
   }
 
   findAll() {
-    return this.categoryRepository.find();
+    return this.categoryRepository.find({ relations: ['parent'] });
   }
 
   getTree() {
@@ -26,7 +34,8 @@ export class CategoriesService {
       where: { parent: IsNull() },
       relations: ['children'],
       order: {
-        name: 'ASC', // Or add a separate 'order' column later
+        order: 'ASC',
+        name: 'ASC',
       }
     });
   }
@@ -39,26 +48,39 @@ export class CategoriesService {
     return this.categoryRepository.update(id, updateCategoryDto);
   }
 
+  async reorder(items: { id: string; order: number }[]) {
+    await this.categoryRepository.manager.transaction(async (transactionalEntityManager) => {
+      for (const item of items) {
+        await transactionalEntityManager.update(Category, item.id, { order: item.order });
+      }
+    });
+    return { success: true };
+  }
+
   async seed() {
     const levels = [
       {
         name: 'Tiểu học',
         slug: 'tieu-hoc',
+        order: 1,
         children: ['Lớp 1', 'Lớp 2', 'Lớp 3', 'Lớp 4', 'Lớp 5'],
       },
       {
         name: 'Trung học cơ sở',
         slug: 'thcs',
+        order: 2,
         children: ['Lớp 6', 'Lớp 7', 'Lớp 8', 'Lớp 9'],
       },
       {
         name: 'Trung học phổ thông',
         slug: 'thpt',
+        order: 3,
         children: ['Lớp 10', 'Lớp 11', 'Lớp 12'],
       },
       {
         name: 'Đại học',
         slug: 'dai-hoc',
+        order: 4,
         children: [],
       },
     ];
@@ -70,10 +92,15 @@ export class CategoriesService {
           name: level.name,
           slug: level.slug,
           description: `Tài liệu cấp ${level.name}`,
+          order: level.order,
         });
         parent = await this.categoryRepository.save(parent);
+      } else {
+        parent.order = level.order;
+        await this.categoryRepository.save(parent);
       }
 
+      let childOrder = 1;
       for (const childName of level.children) {
         const childSlug = this.slugify(childName);
         const existingChild = await this.categoryRepository.findOne({ where: { slug: childSlug } });
@@ -83,9 +110,15 @@ export class CategoriesService {
             slug: childSlug,
             parent: parent,
             description: `Tài liệu ${childName}`,
+            order: childOrder,
           });
           await this.categoryRepository.save(child);
+        } else {
+          existingChild.order = childOrder;
+          existingChild.parent = parent;
+          await this.categoryRepository.save(existingChild);
         }
+        childOrder++;
       }
     }
     return { message: 'Seeding completed' };
@@ -106,5 +139,30 @@ export class CategoriesService {
 
   remove(id: string) {
     return this.categoryRepository.delete(id);
+  }
+
+  async updateAutoIncrement() {
+    const roots = await this.categoryRepository.find({
+      where: { parent: IsNull() },
+      order: { name: 'ASC' }
+    });
+
+    let rootOrder = 1;
+    for (const root of roots) {
+      root.order = rootOrder++;
+      await this.categoryRepository.save(root);
+
+      const children = await this.categoryRepository.find({
+        where: { parent: { id: root.id } },
+        order: { name: 'ASC' }
+      });
+
+      let childOrder = 1;
+      for (const child of children) {
+        child.order = childOrder++;
+        await this.categoryRepository.save(child);
+      }
+    }
+    return { message: 'Auto-increment updated' };
   }
 }

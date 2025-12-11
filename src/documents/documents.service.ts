@@ -79,6 +79,10 @@ export class DocumentsService {
     return this.documentRepository.update(id, updateData);
   }
 
+  async updateStatus(id: string, status: DocumentStatus) {
+    return this.documentRepository.update(id, { status });
+  }
+
   remove(id: string) {
     return this.documentRepository.delete(id);
   }
