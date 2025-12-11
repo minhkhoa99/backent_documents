@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, ManyToOne } from 'typeorm';
 import { Document } from '../../documents/entities/document.entity';
 
 @Entity('categories')
@@ -23,4 +23,10 @@ export class Category {
 
     @OneToMany(() => Document, (document) => document.category)
     documents: Document[];
+
+    @ManyToOne(() => Category, (category) => category.children, { nullable: true, onDelete: 'SET NULL' })
+    parent: Category;
+
+    @OneToMany(() => Category, (category) => category.parent)
+    children: Category[];
 }

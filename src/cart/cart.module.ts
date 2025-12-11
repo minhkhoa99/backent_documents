@@ -2,7 +2,8 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CartService } from './cart.service';
 import { CartController } from './cart.controller';
-import { Cart, CartItem } from './entities/cart.entity';
+import { Cart } from './entities/cart.entity';
+import { CartItem } from './entities/cart-item.entity';
 import { Document } from '../documents/entities/document.entity';
 
 @Module({

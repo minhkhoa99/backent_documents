@@ -7,9 +7,19 @@ import { UpdateCategoryDto } from './dto/update-category.dto';
 export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) { }
 
+  @Post('seed')
+  seed() {
+    return this.categoriesService.seed();
+  }
+
   @Post()
   create(@Body() createCategoryDto: CreateCategoryDto) {
     return this.categoriesService.create(createCategoryDto);
+  }
+
+  @Get('tree')
+  getTree() {
+    return this.categoriesService.getTree();
   }
 
   @Get()

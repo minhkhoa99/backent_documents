@@ -13,6 +13,8 @@ import { OrdersModule } from './orders/orders.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { WalletsModule } from './wallets/wallets.module';
 import { CartModule } from './cart/cart.module';
+import { MenusModule } from './menus/menus.module';
+import { SellerModule } from './seller/seller.module';
 
 @Module({
   imports: [
@@ -52,6 +54,8 @@ import { CartModule } from './cart/cart.module';
     TransactionsModule,
     WalletsModule,
     CartModule,
+    MenusModule,
+    SellerModule,
   ],
   controllers: [AppController],
   providers: [AppService],

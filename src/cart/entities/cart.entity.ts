@@ -1,21 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToOne, JoinColumn, OneToMany, ManyToOne, Column } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToOne, JoinColumn, OneToMany } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
-import { Document } from '../../documents/entities/document.entity';
-
-@Entity('cart_items')
-export class CartItem {
-    @PrimaryGeneratedColumn('uuid')
-    id: string;
-
-    @ManyToOne(() => Cart, (cart) => cart.items, { onDelete: 'CASCADE' })
-    cart: Cart;
-
-    @ManyToOne(() => Document, { eager: true }) // Eager load to see product details
-    document: Document;
-
-    @CreateDateColumn()
-    createdAt: Date;
-}
+import { CartItem } from './cart-item.entity';
 
 @Entity('carts')
 export class Cart {

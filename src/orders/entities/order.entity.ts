@@ -1,26 +1,11 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
-import { Document } from '../../documents/entities/document.entity';
+import { OrderItem } from './order-item.entity';
 
 export enum OrderStatus {
     PENDING = 'pending',
     COMPLETED = 'completed',
     FAILED = 'failed',
-}
-
-@Entity('order_items')
-export class OrderItem {
-    @PrimaryGeneratedColumn('uuid')
-    id: string;
-
-    @ManyToOne(() => Order, (order) => order.items, { onDelete: 'CASCADE' })
-    order: Order;
-
-    @ManyToOne(() => Document)
-    document: Document;
-
-    @Column('decimal', { precision: 10, scale: 2 })
-    price: number;
 }
 
 @Entity('orders')
