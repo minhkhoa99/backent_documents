@@ -9,16 +9,16 @@ export class CartController {
 
   @Post()
   addToCart(@Request() req, @Body('documentId') documentId: string) {
-    return this.cartService.addToCart(req.user.id, documentId);
+    return this.cartService.addToCart(req.user.userId, documentId);
   }
 
   @Get()
   getCart(@Request() req) {
-    return this.cartService.getCart(req.user.id);
+    return this.cartService.getCart(req.user.userId);
   }
 
   @Delete(':id')
   removeFromCart(@Request() req, @Param('id') itemId: string) {
-    return this.cartService.removeFromCart(req.user.id, itemId);
+    return this.cartService.removeFromCart(req.user.userId, itemId);
   }
 }

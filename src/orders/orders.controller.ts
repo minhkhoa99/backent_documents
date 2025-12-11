@@ -9,11 +9,11 @@ export class OrdersController {
 
   @Post('checkout')
   checkout(@Request() req) {
-    return this.ordersService.checkout(req.user.id);
+    return this.ordersService.checkout(req.user.userId);
   }
 
   @Get('my-documents')
   getMyDocuments(@Request() req) {
-    return this.ordersService.getMyDocuments(req.user.id);
+    return this.ordersService.getMyDocuments(req.user.userId);
   }
 }
