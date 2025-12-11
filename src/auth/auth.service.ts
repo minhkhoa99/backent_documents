@@ -14,6 +14,9 @@ export class AuthService {
   async validateUser(email: string, pass: string): Promise<any> {
     const user = await this.usersService.findByEmail(email);
     if (user && user.password && (await bcrypt.compare(pass, user.password))) {
+      // Check if active
+      if (!user.isActive) return null; // Or throw specific exception if we want detail
+
       const { password, ...result } = user;
       return result;
     }
