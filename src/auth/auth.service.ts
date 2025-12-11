@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ForbiddenException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
@@ -23,7 +23,14 @@ export class AuthService {
     return null;
   }
 
-  async login(user: any) {
+  async login(user: any, portal?: 'admin' | 'user') {
+    if (portal === 'user' && user.role === 'admin') {
+      throw new ForbiddenException('Admin accounts must use the Admin Portal.');
+    }
+    if (portal === 'admin' && user.role !== 'admin') {
+      throw new ForbiddenException('Only Administrators can access this portal.');
+    }
+
     const payload = { email: user.email, sub: user.id, role: user.role, fullName: user.fullName };
     return {
       access_token: this.jwtService.sign(payload),
