@@ -20,4 +20,8 @@ export class CreateDocumentDto {
     @IsString()
     @IsOptional()
     categoryId?: string;
+
+    @IsUrl()
+    @IsOptional()
+    avatar?: string;
 }

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, UploadedFile, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, UploadedFile, UseGuards, Request } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { DocumentsService } from './documents.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
@@ -13,6 +13,13 @@ import { DocumentStatus } from './entities/document.entity';
 export class DocumentsController {
   constructor(private readonly documentsService: DocumentsService) { }
 
+  @Get(':id/download')
+  @UseGuards(JwtAuthGuard)
+  async download(@Param('id') id: string, @Request() req) {
+    const url = await this.documentsService.download(id, req.user.userId);
+    return { url };
+  }
+
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
   uploadFile(@UploadedFile() file: Express.Multer.File) {
@@ -20,8 +27,9 @@ export class DocumentsController {
   }
 
   @Post()
-  create(@Body() createDocumentDto: CreateDocumentDto) {
-    return this.documentsService.create(createDocumentDto);
+  @UseGuards(JwtAuthGuard)
+  create(@Body() createDocumentDto: CreateDocumentDto, @Request() req) {
+    return this.documentsService.create(createDocumentDto, req.user.userId);
   }
 
   @Get()

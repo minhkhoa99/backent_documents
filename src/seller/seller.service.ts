@@ -4,7 +4,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Document } from '../documents/entities/document.entity';
 import { OrderItem } from '../orders/entities/order-item.entity';
-import { User } from '../users/entities/user.entity';
+import { InjectQueue } from '@nestjs/bull';
+import type { Queue } from 'bull';
 
 @Injectable()
 export class SellerService {
@@ -13,6 +14,7 @@ export class SellerService {
     private docsRepo: Repository<Document>,
     @InjectRepository(OrderItem)
     private orderItemRepo: Repository<OrderItem>,
+    @InjectQueue('documents') private documentsQueue: Queue,
   ) { }
 
   async getStats(sellerId: string) {
@@ -47,7 +49,10 @@ export class SellerService {
 
   async getDocuments(sellerId: string) {
     return this.docsRepo.find({
-      where: { author: { id: sellerId } },
+      where: {
+        author: { id: sellerId },
+        isDeleted: false
+      },
       relations: ['price', 'category'],
       order: { createdAt: 'DESC' }
     });
@@ -75,7 +80,7 @@ export class SellerService {
   }
 
   async updateDocument(sellerId: string, docId: string, updateData: any) {
-    const doc = await this.docsRepo.findOne({ where: { id: docId }, relations: ['author', 'price'] });
+    const doc = await this.docsRepo.findOne({ where: { id: docId }, relations: ['author', 'price', 'category'] });
     if (!doc) {
       throw new Error('Document not found'); // Use proper exceptions in real app
     }
@@ -85,11 +90,31 @@ export class SellerService {
 
     doc.title = updateData.title || doc.title;
     doc.description = updateData.description || doc.description;
+    doc.avatar = updateData.avatar || doc.avatar;
+    if (updateData.categoryId) {
+      doc.category = { id: updateData.categoryId } as any;
+    }
+
+    // Update active status
+    if (updateData.isActive !== undefined) {
+      doc.isActive = updateData.isActive;
+    }
+
+    if (updateData.fileUrl && updateData.fileUrl !== doc.fileUrl) {
+      doc.fileUrl = updateData.fileUrl; // Update file url
+      const fileKey = doc.fileUrl.split('/').pop();
+      if (fileKey) {
+        await this.documentsQueue.add('process-pdf', {
+          documentId: doc.id,
+          fileKey: fileKey
+        });
+      }
+    }
 
     // Update price if provided
     if (updateData.price !== undefined) {
       if (!doc.price) {
-        // Create new price if missing (shouldn't happen usually)
+        // Create new price if missing
       } else {
         doc.price.amount = updateData.price;
       }
@@ -103,6 +128,7 @@ export class SellerService {
     if (!doc) throw new Error('Document not found');
     if (doc.author.id !== sellerId) throw new Error('Forbidden');
 
-    return this.docsRepo.remove(doc);
+    doc.isDeleted = true;
+    return this.docsRepo.save(doc);
   }
 }

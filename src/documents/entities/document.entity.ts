@@ -26,6 +26,9 @@ export class Document {
     @Column({ nullable: true })
     previewUrl: string;
 
+    @Column({ nullable: true })
+    avatar: string;
+
     @Column('int', { default: 0 })
     totalPage: number;
 
@@ -35,6 +38,12 @@ export class Document {
         default: DocumentStatus.PENDING,
     })
     status: DocumentStatus;
+
+    @Column({ default: false })
+    isDeleted: boolean;
+
+    @Column({ default: true })
+    isActive: boolean;
 
     @CreateDateColumn()
     createdAt: Date;
