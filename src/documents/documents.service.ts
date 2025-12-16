@@ -94,14 +94,32 @@ export class DocumentsService {
         isActive: true,
         status: DocumentStatus.APPROVED
       },
-      relations: ['category', 'author', 'price']
+      relations: ['category', 'author', 'price'],
+      select: {
+        author: {
+          id: true,
+          email: true,
+          fullName: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      }
     });
   }
 
   findOne(id: string) {
     return this.documentRepository.findOne({
       where: { id, isDeleted: false }, // Allow viewing inactive? Maybe "Product unavailable" logic in frontend. But deleted definitely gone.
-      relations: ['category', 'author', 'price']
+      relations: ['category', 'author', 'price'],
+      select: {
+        author: {
+          id: true,
+          email: true,
+          fullName: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      }
     });
   }
 
