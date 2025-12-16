@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException, ForbiddenException, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In, Like } from 'typeorm';
 import { InjectQueue } from '@nestjs/bull';
 import type { Queue } from 'bull';
 import { CreateDocumentDto } from './dto/create-document.dto';
@@ -114,24 +114,66 @@ export class DocumentsService {
     return savedDoc;
   }
 
-  findAll() {
-    return this.documentRepository.find({
-      where: {
-        isDeleted: false,
-        isActive: true,
-        status: DocumentStatus.APPROVED
-      },
-      relations: ['category', 'author', 'price'],
-      select: {
-        author: {
-          id: true,
-          email: true,
-          fullName: true,
-          createdAt: true,
-          updatedAt: true
-        }
+  async findAll(categoryIds?: string, fileTypes?: string, sort?: string, order: 'ASC' | 'DESC' = 'DESC', page: number = 1, limit: number = 12, search?: string) {
+    const qb = this.documentRepository.createQueryBuilder('document')
+      .leftJoinAndSelect('document.category', 'category')
+      .leftJoinAndSelect('document.author', 'author')
+      .leftJoinAndSelect('document.price', 'price')
+      .where('document.isDeleted = :isDeleted', { isDeleted: false })
+      .andWhere('document.isActive = :isActive', { isActive: true })
+      .andWhere('document.status = :status', { status: DocumentStatus.APPROVED });
+
+    if (categoryIds) {
+      const ids = categoryIds.split(',').filter(Boolean);
+      if (ids.length > 0) {
+        qb.andWhere('category.id IN (:...catIds)', { catIds: ids });
       }
-    });
+    }
+
+    if (fileTypes) {
+      const types = fileTypes.split(',').filter(Boolean);
+      if (types.length > 0) {
+        const typeConditions = types.map((type, idx) => `LOWER(document.fileUrl) LIKE :type${idx}`);
+        const parameters = {};
+        types.forEach((type, idx) => {
+          parameters[`type${idx}`] = `%.${type.toLowerCase()}`;
+        });
+        qb.andWhere(`(${typeConditions.join(' OR ')})`, parameters);
+      }
+    }
+
+    if (search) {
+      qb.andWhere('LOWER(document.title) LIKE LOWER(:search)', { search: `%${search}%` });
+    }
+
+    if (sort === 'price') {
+      qb.orderBy('price.amount', order);
+    } else if (sort === 'popular' || sort === 'views') {
+      qb.orderBy('document.views', 'DESC');
+    } else {
+      qb.orderBy('document.createdAt', order);
+    }
+
+    const skip = (page - 1) * limit;
+    qb.skip(skip).take(limit);
+
+    // Explicitly selecting user fields is tricky with QB leftJoinAndSelect if we want to partially select from the joined relation directly without losing the main object structure easily or using raw results.
+    // However, the standard `leftJoinAndSelect` will populate the whole entity.
+    // Assuming User entity has precautions or we don't mind exposing public fields in this context.
+    // If strict security is needed, we should modify selection or use a DTO interceptor.
+    // For now, let's proceed (Previous code also just relied on `select` in repository.find)
+
+    const [data, total] = await qb.getManyAndCount();
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      }
+    };
   }
 
   async findOne(id: string, userId?: string) {

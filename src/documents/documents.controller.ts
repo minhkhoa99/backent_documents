@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, UploadedFile, UseGuards, Request, StreamableFile, Header } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, UploadedFile, UseGuards, Request, StreamableFile, Header, Query } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { DocumentsService } from './documents.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
@@ -49,8 +49,16 @@ export class DocumentsController {
   }
 
   @Get()
-  findAll() {
-    return this.documentsService.findAll();
+  findAll(
+    @Query('categoryIds') categoryIds?: string,
+    @Query('fileTypes') fileTypes?: string,
+    @Query('sort') sort?: string,
+    @Query('order') order?: 'ASC' | 'DESC',
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 12,
+    @Query('search') search?: string,
+  ) {
+    return this.documentsService.findAll(categoryIds, fileTypes, sort, order, Number(page), Number(limit), search);
   }
 
   @Get(':id')

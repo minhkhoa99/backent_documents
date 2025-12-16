@@ -13,20 +13,30 @@ export class MenusService {
   ) { }
 
   async create(createMenuDto: CreateMenuDto) {
-    if (!createMenuDto.order) {
-      const parentCondition = createMenuDto.parentId ? { id: createMenuDto.parentId } : IsNull();
-      const lastItem = await this.menuRepository.findOne({
-        where: { parent: parentCondition },
-        order: { order: 'DESC' },
+    try {
+      const { parentId, ...rest } = createMenuDto;
+
+      if (!rest.order) {
+        const parentCondition = parentId ? { id: parentId } : IsNull();
+        const lastItem = await this.menuRepository.findOne({
+          where: { parent: parentCondition },
+          order: { order: 'DESC' },
+        });
+        rest.order = lastItem ? lastItem.order + 1 : 1;
+      }
+
+      console.log('Creating menu with data:', { ...rest, parentId });
+
+      const menu = this.menuRepository.create({
+        ...rest,
+        parent: parentId ? { id: parentId } : undefined,
       });
-      createMenuDto.order = lastItem ? lastItem.order + 1 : 1; // Start at 1 if no items
+      return await this.menuRepository.save(menu);
+    } catch (error) {
+      console.error('Error creating menu:', error);
+      console.error('Input DTO:', createMenuDto);
+      throw error;
     }
-    const parent = createMenuDto.parentId ? { id: createMenuDto.parentId } : undefined;
-    const menu = this.menuRepository.create({
-      ...createMenuDto,
-      parent
-    });
-    return this.menuRepository.save(menu);
   }
 
   findAll() {
@@ -47,8 +57,20 @@ export class MenusService {
     return this.menuRepository.findOne({ where: { id } });
   }
 
-  update(id: string, updateMenuDto: UpdateMenuDto) {
-    return this.menuRepository.update(id, updateMenuDto);
+  async update(id: string, updateMenuDto: UpdateMenuDto) {
+    const { parentId, ...rest } = updateMenuDto;
+
+    const menu = await this.menuRepository.preload({
+      id,
+      ...rest,
+      parent: parentId !== undefined ? (parentId ? { id: parentId } : null as unknown as Menu) : undefined,
+    });
+
+    if (!menu) {
+      throw new Error(`Menu #${id} not found`);
+    }
+
+    return this.menuRepository.save(menu);
   }
 
   remove(id: string) {

@@ -51,6 +51,9 @@ export class Document {
     @UpdateDateColumn()
     updatedAt: Date;
 
+    @Column({ default: 0 })
+    views: number;
+
     @ManyToOne(() => Category, (category) => category.documents)
     category: Category;
 
