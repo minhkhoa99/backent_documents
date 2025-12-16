@@ -24,6 +24,15 @@ export class DocumentsProcessor {
             // 1. Download file
             const fileBuffer = await this.storageService.getFile(fileKey);
 
+            // Check if file is PDF
+            if (!fileKey.toLowerCase().endsWith('.pdf')) {
+                console.log(`Document ${documentId} is not a PDF. Approving without preview.`);
+                await this.documentRepository.update(documentId, {
+                    status: DocumentStatus.APPROVED,
+                });
+                return;
+            }
+
             // 2. Load PDF
             const pdfDoc = await PDFDocument.load(fileBuffer);
             const totalPage = pdfDoc.getPageCount();
