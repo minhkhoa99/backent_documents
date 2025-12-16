@@ -21,6 +21,7 @@ export class DocumentsController {
   }
 
   @Post('upload')
+  @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor('file'))
   uploadFile(@UploadedFile() file: Express.Multer.File) {
     return this.documentsService.upload(file);
@@ -57,11 +58,13 @@ export class DocumentsController {
   }
 
   @Patch(':id')
+  @UseGuards(JwtAuthGuard)
   update(@Param('id') id: string, @Body() updateDocumentDto: UpdateDocumentDto) {
     return this.documentsService.update(id, updateDocumentDto);
   }
 
   @Delete(':id')
+  @UseGuards(JwtAuthGuard)
   remove(@Param('id') id: string) {
     return this.documentsService.remove(id);
   }
