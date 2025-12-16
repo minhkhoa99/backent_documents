@@ -4,6 +4,7 @@ import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { v4 as uuidv4 } from 'uuid';
 import * as path from 'path';
+import { Readable } from 'stream';
 
 @Injectable()
 export class StorageService {
@@ -64,6 +65,7 @@ export class StorageService {
     }
 
     async getFile(fileName: string): Promise<Buffer> {
+        console.log('StorageService: getFile requesting', fileName);
         try {
             const response = await this.s3Client.send(
                 new GetObjectCommand({
@@ -78,10 +80,40 @@ export class StorageService {
             for await (const chunk of stream) {
                 chunks.push(chunk);
             }
-            return Buffer.concat(chunks);
+            const buffer = Buffer.concat(chunks);
+            console.log('StorageService: getFile success. Size:', buffer.length);
+            return buffer;
         } catch (error) {
             console.error('Error getting file from storage:', error);
             throw new InternalServerErrorException('Could not get file');
+        }
+    }
+
+    async getFileStream(fileName: string): Promise<Readable> {
+        const fs = require('fs');
+        const logPath = 'e:/web_documents/storage_debug.log';
+        const info = `[${new Date().toISOString()}] Requesting file stream. Bucket: ${this.bucketName}, Key: ${fileName}\n`;
+        try {
+            fs.appendFileSync(logPath, info);
+        } catch (e) { }
+
+        console.log('StorageService: requesting file stream', { bucket: this.bucketName, key: fileName });
+        try {
+            const response = await this.s3Client.send(
+                new GetObjectCommand({
+                    Bucket: this.bucketName,
+                    Key: fileName,
+                }),
+            );
+            return response.Body as Readable;
+        } catch (error) {
+            const errInfo = `[${new Date().toISOString()}] Error getting file stream: ${error.message} \nStack: ${error.stack}\n`;
+            try {
+                fs.appendFileSync(logPath, errInfo);
+            } catch (e) { }
+
+            console.error('Error getting file stream:', error);
+            throw new InternalServerErrorException(`Could not get file stream: ${error.message}`);
         }
     }
 

@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Body, UseGuards, Request, Res } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, Request, Res, UnauthorizedException } from '@nestjs/common';
 import type { Response } from 'express';
 import { AuthService } from './auth.service';
+import { UsersService } from '../users/users.service';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { LocalAuthGuard } from './guards/local-auth.guard';
@@ -8,7 +9,10 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) { }
+  constructor(
+    private readonly authService: AuthService,
+    private readonly usersService: UsersService
+  ) { }
 
   @UseGuards(LocalAuthGuard)
   @Post('login')
@@ -65,7 +69,21 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('profile')
-  getProfile(@Request() req) {
-    return req.user;
+  async getProfile(@Request() req) {
+    // req.user contains info from JWT payload
+    // Fetch fresh data from DB to ensure up-to-date info (e.g. name change, phone change)
+    const user = await this.usersService.findOne(req.user.userId);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    // Return safe public info
+    return {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      role: user.role,
+      phone: user.phone
+    };
   }
 }

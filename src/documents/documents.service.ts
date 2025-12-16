@@ -20,6 +20,33 @@ export class DocumentsService {
     @InjectQueue('documents') private documentsQueue: Queue,
   ) { }
 
+  async getFileBuffer(id: string) {
+    const document = await this.documentRepository.findOne({ where: { id } });
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+    let fileKey = document.fileUrl.split('/').pop();
+    if (fileKey) fileKey = decodeURIComponent(fileKey);
+
+    if (!fileKey) throw new InternalServerErrorException('Invalid file URL');
+    return this.storageService.getFile(fileKey);
+  }
+
+  async getFileStream(id: string) {
+    const document = await this.documentRepository.findOne({ where: { id } });
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+    // Extract key from URL. Use decodeURIComponent to handle spaces/special chars.
+    let fileKey = document.fileUrl.split('/').pop();
+    if (fileKey) fileKey = decodeURIComponent(fileKey);
+
+    console.log('DocumentsService: getFileStream', { id, fileUrl: document.fileUrl, derivedKey: fileKey });
+
+    if (!fileKey) throw new InternalServerErrorException('Invalid file URL');
+    return this.storageService.getFileStream(fileKey);
+  }
+
   async download(id: string, userId: string): Promise<string> {
     const document = await this.findOne(id);
     if (!document) {
@@ -107,9 +134,9 @@ export class DocumentsService {
     });
   }
 
-  findOne(id: string) {
-    return this.documentRepository.findOne({
-      where: { id, isDeleted: false }, // Allow viewing inactive? Maybe "Product unavailable" logic in frontend. But deleted definitely gone.
+  async findOne(id: string, userId?: string) {
+    const document = await this.documentRepository.findOne({
+      where: { id, isDeleted: false },
       relations: ['category', 'author', 'price'],
       select: {
         author: {
@@ -121,6 +148,31 @@ export class DocumentsService {
         }
       }
     });
+
+    if (!document) return null;
+
+    let isPurchased = false;
+
+    if (userId) {
+      // 1. Author always has access
+      if (document.author && document.author.id === userId) {
+        isPurchased = true;
+      } else {
+        // 2. Check orders
+        const order = await this.orderRepository.findOne({
+          where: {
+            user: { id: userId },
+            status: OrderStatus.COMPLETED,
+            items: {
+              document: { id },
+            },
+          },
+        });
+        if (order) isPurchased = true;
+      }
+    }
+
+    return { ...document, isPurchased };
   }
 
   async update(id: string, updateDocumentDto: UpdateDocumentDto) {
