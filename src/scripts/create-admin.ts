@@ -9,7 +9,7 @@ async function seedAdmin() {
     const userRepo = AppDataSource.getRepository(User);
 
     const adminEmail = 'admin@edumarket.com';
-    const adminPassword = 'adminpassword123'; // Change this in production
+    const adminPassword = '123456a@'; // adminpassword123
 
     const existingAdmin = await userRepo.findOne({ where: { email: adminEmail } });
     if (existingAdmin) {

@@ -35,8 +35,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     async validate(payload: any) {
-        console.log("payload: ", payload);
-
         const isValid = await this.authService.isTokenValid(payload.jti);
         if (!isValid) {
             throw new UnauthorizedException('Token revoked or expired');

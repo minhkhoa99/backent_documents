@@ -39,10 +39,7 @@ import Redis from 'ioredis';
         }
         return {
           privateKey: privateKey,
-          // For now, let's just load it as privateKey and use algorithm: 'RS256' if possible.
-          // However, verification needs Public Key. The user didn't provide public_key.pem.
-          // We can derive public key from private key if needed, or maybe it's just a secret string in a .pem file?
-          // Let's assume RS256.
+          publicKey: publicKey,
           signOptions: { expiresIn: '1d', algorithm: 'RS256' },
         };
       },
