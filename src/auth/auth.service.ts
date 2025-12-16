@@ -80,6 +80,7 @@ export class AuthService {
         sub: user.id,
         role: user.role,
         fullName: user.fullName,
+        phone: user.phone,
         jti: jti,
         type: 'access'
       };
@@ -103,7 +104,8 @@ export class AuthService {
           id: user.id,
           email: user.email,
           fullName: user.fullName,
-          role: user.role
+          role: user.role,
+          phone: user.phone
         }
       };
     } catch (error) {
@@ -170,6 +172,7 @@ export class AuthService {
         sub: user.id,
         role: user.role,
         fullName: user.fullName,
+        phone: user.phone,
         jti: newAccessJti,
         type: 'access'
       };
