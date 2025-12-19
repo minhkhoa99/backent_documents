@@ -1,4 +1,6 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, UploadedFile, UseGuards, Request, StreamableFile, Header, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, UploadedFile, UseGuards, Request, StreamableFile, Header, Query, Res } from '@nestjs/common';
+import type { Response } from 'express';
+import * as path from 'path';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { DocumentsService } from './documents.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
@@ -15,12 +17,56 @@ export class DocumentsController {
   constructor(private readonly documentsService: DocumentsService) { }
 
   @Get(':id/file')
-  @Header('Content-Type', 'application/pdf')
-  @Header('Content-Disposition', 'inline')
-  async serveFile(@Param('id') id: string): Promise<StreamableFile> {
+  async serveFile(@Param('id') id: string, @Res({ passthrough: true }) res: Response): Promise<StreamableFile> {
     try {
+      const document = await this.documentsService.findOne(id);
+      if (!document) {
+        // If service throws NotFound, we might catch it below, but best to check.
+        // service.findOne returns null if not found (in some implementations) or throws.
+        // service.getFileBuffer throws NotFoundException if not found.
+      }
+
       const buffer = await this.documentsService.getFileBuffer(id);
       console.log('DocumentsController: Serving file buffer size:', buffer.length);
+
+      // Determine content type
+      // We need fileUrl to get extension. 
+      // getFileBuffer gets document internally but doesn't return it.
+      // We should probably optimize this to avoid double fetching, but findOne is cached or fast enough.
+      // Actually, let's just fetch document again or use the one from getFileBuffer if we refactor.
+      // For now, calling findOne is safest to get filename.
+      // But wait, getFileBuffer fetch document by ID. 
+      // Let's rely on finding it.
+
+      let contentType = 'application/octet-stream';
+      let filename = 'document';
+
+      if (document && document.fileUrl) {
+        const parts = document.fileUrl.split('/');
+        filename = parts[parts.length - 1];
+        const ext = path.extname(filename).toLowerCase();
+
+        const mimeTypes: Record<string, string> = {
+          '.pdf': 'application/pdf',
+          '.doc': 'application/msword',
+          '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          '.xls': 'application/vnd.ms-excel',
+          '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          '.ppt': 'application/vnd.ms-powerpoint',
+          '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          '.png': 'image/png',
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.txt': 'text/plain',
+        };
+        contentType = mimeTypes[ext] || 'application/octet-stream';
+      }
+
+      res.set({
+        'Content-Type': contentType,
+        'Content-Disposition': `inline; filename="${encodeURIComponent(filename)}"`
+      });
+
       return new StreamableFile(buffer);
     } catch (error) {
       console.error('Error serving file:', error);
@@ -38,8 +84,8 @@ export class DocumentsController {
   @Post('upload')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor('file'))
-  uploadFile(@UploadedFile() file: Express.Multer.File) {
-    return this.documentsService.upload(file);
+  uploadFile(@UploadedFile() file: Express.Multer.File, @Query('configThumString') configThumString?: string) {
+    return this.documentsService.upload(file, configThumString);
   }
 
   @Post()

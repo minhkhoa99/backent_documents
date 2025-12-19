@@ -5,6 +5,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { v4 as uuidv4 } from 'uuid';
 import * as path from 'path';
 import { Readable } from 'stream';
+import sharp from 'sharp';
 
 @Injectable()
 export class StorageService {
@@ -41,10 +42,57 @@ export class StorageService {
         }
     }
 
-    async uploadFile(file: Express.Multer.File): Promise<string> {
-        const fileExtension = path.extname(file.originalname);
-        const fileName = `${uuidv4()}${fileExtension}`;
-        return this.uploadBuffer(file.buffer, fileName, file.mimetype);
+    async uploadFile(file: Express.Multer.File, configThumString?: string): Promise<string> {
+        const fileExtension = path.extname(file.originalname).toLowerCase();
+        const baseName = uuidv4();
+        const fileName = `${baseName}${fileExtension}`;
+
+        // Always upload original
+        const originalPath = await this.uploadBuffer(file.buffer, fileName, file.mimetype);
+
+        // Process resizing if config is present and file is an image
+        if (configThumString && ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(fileExtension.replace('.', ''))) {
+            try {
+                // Parse config: e.g., [{"width": 800, "height": 600}, ...]
+                // The user mentioned just sending config, so we expect similar structure.
+                // Or maybe the user sends JSON string directly.
+                let configs: { width: number; height: number }[] = [];
+                try {
+                    configs = JSON.parse(configThumString);
+                    // Ensure it's an array
+                    if (!Array.isArray(configs)) configs = [configs];
+                } catch (e) {
+                    console.error('Invalid thumb config JSON', e);
+                }
+
+                if (configs.length > 0) {
+                    await Promise.all(configs.map(async (conf) => {
+                        if (conf.width && conf.height) {
+                            try {
+                                const resizedBuffer = await sharp(file.buffer)
+                                    .resize(conf.width, conf.height, {
+                                        fit: 'cover', // crop to cover aspect ratio
+                                    })
+                                    .toBuffer();
+
+                                // Folder structure: {width}x{height}/{filename}
+                                const sizeFolder = `${conf.width}x${conf.height}`;
+                                const resizedKey = `${sizeFolder}/${fileName}`;
+
+                                await this.uploadBuffer(resizedBuffer, resizedKey, file.mimetype);
+                                console.log(`Uploaded resized image: ${resizedKey}`);
+                            } catch (err) {
+                                console.error(`Error resizing to ${conf.width}x${conf.height}`, err);
+                            }
+                        }
+                    }));
+                }
+            } catch (err) {
+                console.error('Error processing image thumbnails', err);
+            }
+        }
+
+        return originalPath;
     }
 
     async uploadBuffer(buffer: Buffer, fileName: string, contentType: string): Promise<string> {

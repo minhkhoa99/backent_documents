@@ -80,11 +80,11 @@ export class DocumentsService {
     return this.storageService.getPresignedUrl(fileKey);
   }
 
-  async upload(file: Express.Multer.File) {
+  async upload(file: Express.Multer.File, configThumString?: string) {
     if (!file) {
       throw new BadRequestException('File is required');
     }
-    const fileName = await this.storageService.uploadFile(file);
+    const fileName = await this.storageService.uploadFile(file, configThumString);
     const fileUrl = this.storageService.getPublicUrl(fileName);
     return { url: fileUrl, path: fileName };
   }

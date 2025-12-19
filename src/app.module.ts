@@ -15,6 +15,7 @@ import { WalletsModule } from './wallets/wallets.module';
 import { CartModule } from './cart/cart.module';
 import { MenusModule } from './menus/menus.module';
 import { SellerModule } from './seller/seller.module';
+import { ContentBlocksModule } from './content-blocks/content-blocks.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { SellerModule } from './seller/seller.module';
     CartModule,
     MenusModule,
     SellerModule,
+    ContentBlocksModule,
   ],
   controllers: [AppController],
   providers: [AppService],
