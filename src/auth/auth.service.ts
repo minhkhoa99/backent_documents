@@ -1,13 +1,18 @@
-import { Injectable, ForbiddenException, Inject, UnauthorizedException } from '@nestjs/common';
+import { Injectable, ForbiddenException, Inject, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
 import { CreateUserDto } from '../users/dto/create-user.dto';
+import { RegisterInitDto } from './dto/register-init.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SessionDevice } from './entities/session-device.entity';
 import { Redis } from 'ioredis';
 import { v4 as uuidv4 } from 'uuid';
+import { MailerService } from '@nestjs-modules/mailer';
+import { SendOtpDto, VerifyOtpDto } from './dto/otp.dto';
+import { FinalizeRegisterDto, ResetPasswordDto } from './dto/finalize.dto';
+import { UserRole } from '../users/entities/user.entity';
 
 @Injectable()
 export class AuthService {
@@ -17,6 +22,7 @@ export class AuthService {
     @InjectRepository(SessionDevice)
     private sessionDeviceRepo: Repository<SessionDevice>,
     @Inject('REDIS_CLIENT') private readonly redis: Redis,
+    private readonly mailerService: MailerService,
   ) { }
 
   async validateUser(email: string, pass: string): Promise<any> {
@@ -191,12 +197,229 @@ export class AuthService {
     }
   }
 
-  async register(createUserDto: CreateUserDto) {
-    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
-    return this.usersService.create({
-      ...createUserDto,
+  async register(registerDto: RegisterInitDto) {
+    // 1. Check if user exists
+    const existingUser = await this.usersService.findByEmailOrPhone(registerDto.email, registerDto.phone);
+    if (existingUser) {
+      // If already verified, return status
+      return {
+        verified: existingUser.isVerified,
+        message: existingUser.isVerified ? 'User already exists' : 'User exists but not verified'
+      };
+    }
+
+    // 2. Hash password provided by user
+    const hashedPassword = await bcrypt.hash(registerDto.password, 10);
+
+    // 3. Create User
+    const newUser = await this.usersService.create({
+      email: registerDto.email,
+      phone: registerDto.phone,
       password: hashedPassword,
+      fullName: registerDto.email.split('@')[0], // Default name
+      // role: UserRole.BUYER // Default is BUYER in entity
+    } as CreateUserDto);
+
+    // Explicitly set verified false (though default is false in some DBs, entity defaults to false)
+    // Note: User entity has isVerified default false.
+
+    return {
+      verified: false,
+      message: 'User created successfully',
+      userId: newUser.id
+    };
+  }
+
+  async createOtp(dto: SendOtpDto, ip: string) {
+    // 1. Rate Limit
+    const phoneLimit = parseInt(process.env.CLIENT_PHONE_REQUEST_OTP_LIMIT || '5', 10);
+    const phoneLimitKey = `otp_limit_phone_${dto.phone}`;
+    const ipLimitKey = `otp_limit_ip_${ip}`;
+
+    const phoneCount = await this.redis.incr(phoneLimitKey);
+    // Set expiry to 10 minutes (600s) on first request OR if key exists without TTL (fix for persist edge case)
+    const ttl = await this.redis.ttl(phoneLimitKey);
+    if (phoneCount === 1 || ttl === -1) {
+      await this.redis.expire(phoneLimitKey, 600);
+    }
+
+    if (phoneCount > phoneLimit) {
+      throw new ForbiddenException(`Bạn đã gửi OTP quá ${phoneLimit} lần. Vui lòng thử lại sau 10 phút.`);
+    }
+
+    const ipCount = await this.redis.incr(ipLimitKey);
+    if (ipCount === 1) await this.redis.expire(ipLimitKey, 86400); // 1 day
+    if (ipCount > 100) throw new ForbiddenException('Daily OTP limit reached for this IP');
+
+    // Cooldown
+    const cooldownKey = `otp_cooldown_${dto.phone}`;
+    const cooldownTtl = await this.redis.ttl(cooldownKey);
+    if (cooldownTtl > 0) {
+      throw new ForbiddenException(`Vui lòng đợi ${cooldownTtl} giây trước khi yêu cầu mã mới.`);
+    }
+
+    // 2. Lookup User
+    const user = await this.usersService.findByPhone(dto.phone);
+    if (!user) throw new ForbiddenException('User not found');
+
+    // 3. Generate OTP
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // 4. Save to Redis & DB
+    const otpExpTime = parseInt(process.env.OTP_EXPIRATION_TIME || '180', 10);
+    const otpExp = new Date(Date.now() + otpExpTime * 1000);
+
+    // Redis Storage (Primary)
+    const otpKey = `otp_auth_${user.id}`;
+    await this.redis.set(otpKey, code, 'EX', otpExpTime);
+
+    // DB Storage (Secondary/Audit)
+    await this.usersService.update(user.id, {
+      otpCode: code,
+      otpExp: otpExp,
+      otpRetry: 0
+    } as any);
+
+    // 5. Send Mail
+    try {
+      if (user.email) {
+        await this.mailerService.sendMail({
+          to: user.email,
+          subject: 'Tài liệu điện tử - Xác thực tài khoản',
+          text: `Mã xác thực của bạn là: ${code}\n\nDành cho tài khoản: ${user.email}\nTrên hệ thống Tài liệu điện tử.\n\nMã xác thực có hiệu lực ${process.env.OTP_EXPIRATION_TIME} giây từ thời điểm gửi.`,
+        });
+      }
+    } catch (e) {
+      console.error('Mail error', e);
+      // Continue even if mail fails? Or throw? plan says logic is to send mail.
+      // If mail fails, user can't verify. Should throw.
+      throw new Error('Failed to send OTP email');
+    }
+
+    // 6. Set Cooldown
+    const cooldownTime = parseInt(process.env.OTP_COOLDOWN_TIME || '60', 10);
+    await this.redis.set(cooldownKey, '1', 'EX', cooldownTime);
+
+    return { success: true, message: 'OTP sent to email ' + user.email, expiresIn: otpExpTime };
+  }
+
+  async verifyOtp(dto: VerifyOtpDto) {
+    // 1. Check Block
+    const user = await this.usersService.findByPhone(dto.phone);
+    if (!user) throw new ForbiddenException('User not found');
+
+    const blockKey = `otp_block_${user.id}`;
+    if (await this.redis.get(blockKey)) {
+      throw new ForbiddenException('Too many failed attempts. Please try again later (10m).');
+    }
+
+    // 2. Validate
+    const otpKey = `otp_auth_${user.id}`;
+    const redisOtp = await this.redis.get(otpKey);
+
+    // Priority: Redis > DB
+    const validOtp = redisOtp || user.otpCode;
+    // If redis exists, it is valid based on TTL. If fallback to DB, check exp.
+
+    if (!validOtp) throw new ForbiddenException('No OTP request found');
+
+    // If only verifying against DB and it's expired
+    if (!redisOtp && user.otpExp && new Date() > user.otpExp) throw new ForbiddenException('OTP expired');
+
+    if (String(validOtp) !== String(dto.code)) {
+      const retry = (user.otpRetry || 0) + 1;
+      await this.usersService.update(user.id, { otpRetry: retry } as any);
+
+      if (retry >= 3) {
+        await this.redis.set(blockKey, '1', 'EX', 600); // 10 min
+        throw new ForbiddenException('Too many failed attempts. Blocked for 10 minutes.');
+      }
+      throw new UnauthorizedException('Invalid OTP');
+    }
+
+    // 3. Success
+    await this.redis.del(otpKey); // Clear Redis OTP
+    await this.usersService.update(user.id, {
+      otpCode: null,
+      otpExp: null,
+      otpRetry: 0
+    } as any);
+
+    // 4. Generate Sign Key
+    const signKey = uuidv4();
+    const signKeyKey = `sign_key_${signKey}`;
+    await this.redis.set(signKeyKey, user.id, 'EX', 600); // 10 min
+
+    return {
+      success: true,
+      sign_key: signKey,
+      user_id: user.id
+    };
+  }
+
+  async finalizeRegister(dto: FinalizeRegisterDto) {
+    const signKeyKey = `sign_key_${dto.sign_key}`;
+    const userId = await this.redis.get(signKeyKey);
+
+    if (!userId) {
+      throw new BadRequestException('Invalid or expired sign key');
+    }
+
+    const user = await this.usersService.findOne(userId);
+    if (!user) throw new BadRequestException('User not found');
+
+    // Update Verified
+    await this.usersService.update(userId, { isVerified: true } as any);
+
+    // Clean up
+    await this.redis.del(signKeyKey);
+
+    return { success: true, message: 'Account verified successfully' };
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    const signKeyKey = `sign_key_${dto.sign_key}`;
+    const userId = await this.redis.get(signKeyKey);
+
+    if (!userId) {
+      throw new BadRequestException('Invalid or expired sign key');
+    }
+
+    const user = await this.usersService.findOne(userId);
+    if (!user) throw new BadRequestException('User not found');
+
+    // Hash New Password
+    const hashedPassword = await bcrypt.hash(dto.new_password, 10);
+
+    // Update User
+    await this.usersService.update(userId, {
+      password: hashedPassword,
+      isVerified: true // Also verify if not already
+    } as any);
+
+    // Revoke all sessions (Logout all devices)
+    const sessions = await this.sessionDeviceRepo.find({
+      where: { user: { id: userId }, revoked: false }
     });
+
+    for (const session of sessions) {
+      // Remove Refresh Token from Redis
+      if (session.jti_rf) {
+        await this.redis.del(`token.${session.jti_rf}`);
+      }
+      // Remove Access Token from Redis (if tracked in DB)
+      if (session.jti) {
+        await this.redis.del(`token.${session.jti}`);
+      }
+    }
+
+    // Mark all in DB as revoked
+    await this.sessionDeviceRepo.update({ user: { id: userId } }, { revoked: true });
+
+    // Clean up
+    await this.redis.del(signKeyKey);
+
+    return { success: true, message: 'Password reset successfully' };
   }
 
   // Helper to validate access token presence in Redis

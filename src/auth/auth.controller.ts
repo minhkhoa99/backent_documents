@@ -3,7 +3,11 @@ import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
 import { CreateUserDto } from '../users/dto/create-user.dto';
+import { RegisterInitDto } from './dto/register-init.dto';
+import { SendOtpDto, VerifyOtpDto } from './dto/otp.dto';
+import { FinalizeRegisterDto, ResetPasswordDto } from './dto/finalize.dto';
 import { LoginDto } from './dto/login.dto';
+import { Query } from '@nestjs/common';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
@@ -63,8 +67,30 @@ export class AuthController {
   }
 
   @Post('register')
-  async register(@Body() createUserDto: CreateUserDto) {
-    return this.authService.register(createUserDto);
+  async register(@Body() registerDto: RegisterInitDto) {
+    return this.authService.register(registerDto);
+  }
+
+  @Post('verify_otp')
+  async sendOtp(@Request() req, @Body() dto: SendOtpDto) {
+    // Get IP
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    return this.authService.createOtp(dto, ip);
+  }
+
+  @Get('verify_otp')
+  async verifyOtp(@Query() dto: VerifyOtpDto) {
+    return this.authService.verifyOtp(dto);
+  }
+
+  @Post('finalize_register')
+  async finalizeRegister(@Body() dto: FinalizeRegisterDto) {
+    return this.authService.finalizeRegister(dto);
+  }
+
+  @Post('reset_password')
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto);
   }
 
   @UseGuards(JwtAuthGuard)

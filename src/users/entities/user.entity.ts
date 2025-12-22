@@ -34,6 +34,20 @@ export class User {
     @Column({ default: true })
     isActive: boolean;
 
+    @Column({ name: 'is_verify', default: false })
+    isVerified: boolean;
+
+    @Column({ name: 'otp_code', nullable: true })
+    otpCode: string;
+
+    @Column({ name: 'otp_exp', type: 'timestamp', nullable: true })
+    otpExp: Date;
+
+    @Column({ name: 'otp_retry', default: 0 })
+    otpRetry: number;
+
+
+
     @CreateDateColumn()
     createdAt: Date;
 

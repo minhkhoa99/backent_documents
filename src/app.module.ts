@@ -17,6 +17,8 @@ import { MenusModule } from './menus/menus.module';
 import { SellerModule } from './seller/seller.module';
 import { ContentBlocksModule } from './content-blocks/content-blocks.module';
 
+
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -58,6 +60,8 @@ import { ContentBlocksModule } from './content-blocks/content-blocks.module';
     MenusModule,
     SellerModule,
     ContentBlocksModule,
+
+
   ],
   controllers: [AppController],
   providers: [AppService],

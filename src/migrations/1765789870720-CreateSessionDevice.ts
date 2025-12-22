@@ -3,6 +3,9 @@ import { MigrationInterface, QueryRunner } from "typeorm";
 export class CreateSessionDevice1765789870720 implements MigrationInterface {
 
     public async up(queryRunner: QueryRunner): Promise<void> {
+        const table = await queryRunner.getTable('session_devices');
+        if (table) return;
+
         await queryRunner.query(`
             CREATE TABLE "session_devices" (
                 "id" uuid NOT NULL DEFAULT uuid_generate_v4(),

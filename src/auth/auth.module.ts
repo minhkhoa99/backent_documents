@@ -12,6 +12,7 @@ import { SessionDevice } from './entities/session-device.entity';
 import * as fs from 'fs';
 import * as path from 'path';
 import Redis from 'ioredis';
+import { MailerModule } from '@nestjs-modules/mailer';
 
 @Module({
   imports: [
@@ -19,6 +20,24 @@ import Redis from 'ioredis';
     PassportModule,
     ConfigModule,
     TypeOrmModule.forFeature([SessionDevice]),
+    MailerModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        transport: {
+          host: configService.get('EMAIL_HOST', 'smtp.gmail.com'),
+          port: configService.get('EMAIL_PORT', 587),
+          secure: false,
+          auth: {
+            user: configService.get('EMAIL_USER', 'vuhoangduc.kd@gmail.com'),
+            pass: configService.get('EMAIL_PASSWORD', 'vmsz iiyu wjkg qfhl'),
+          },
+        },
+        defaults: {
+          from: '"No Reply" <noreply@example.com>',
+        },
+      }),
+      inject: [ConfigService],
+    }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => {

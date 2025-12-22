@@ -3,6 +3,7 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
@@ -12,7 +13,10 @@ async function bootstrap() {
     whitelist: true, // Strip properties not in DTO
     transform: true, // Transform payloads to DTO instances
   }));
-  app.useGlobalInterceptors(new TransformInterceptor());
+  app.useGlobalInterceptors(
+    new LoggingInterceptor(),
+    new TransformInterceptor(),
+  );
   app.useGlobalFilters(new HttpExceptionFilter());
   app.enableCors({
     origin: true, // Allow all origins for dev, or specify ['http://localhost:3000']
