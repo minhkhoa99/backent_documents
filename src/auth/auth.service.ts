@@ -324,7 +324,7 @@ export class AuthService {
     if (!validOtp) throw new ForbiddenException('No OTP request found');
 
     // If only verifying against DB and it's expired
-    if (!redisOtp && user.otpExp && new Date() > user.otpExp) throw new ForbiddenException('OTP expired');
+    if (!redisOtp && user.otpExp && new Date() > user.otpExp) throw new ForbiddenException('OTP đã hết hạn');
 
     if (String(validOtp) !== String(dto.code)) {
       const retry = (user.otpRetry || 0) + 1;
