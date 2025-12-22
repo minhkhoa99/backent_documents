@@ -232,11 +232,13 @@ export class AuthService {
 
   async createOtp(dto: SendOtpDto, ip: string) {
     // 1. Rate Limit
-    const phoneLimit = parseInt(process.env.CLIENT_PHONE_REQUEST_OTP_LIMIT || '5', 10);
+    const phoneLimit = parseInt(process.env.CLIENT_PHONE_REQUEST_OTP_LIMIT || '3', 10);
+    console.log(`[OTP Limit] Phone: ${dto.phone}, Limit: ${phoneLimit}`);
     const phoneLimitKey = `otp_limit_phone_${dto.phone}`;
     const ipLimitKey = `otp_limit_ip_${ip}`;
 
     const phoneCount = await this.redis.incr(phoneLimitKey);
+    console.log(`[OTP Limit] Count for ${dto.phone}: ${phoneCount}`);
     // Set expiry to 10 minutes (600s) on first request OR if key exists without TTL (fix for persist edge case)
     const ttl = await this.redis.ttl(phoneLimitKey);
     if (phoneCount === 1 || ttl === -1) {
