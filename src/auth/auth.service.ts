@@ -46,8 +46,12 @@ export class AuthService {
 
       const jti = uuidv4();
       const jti_rf = uuidv4();
-      const accessTokenExp = 86400; // 24h
-      const refreshTokenExp = 86400 * 30; // 30 days
+      const accessToken = parseInt(process.env.JWT_ACCESS_TOKEN_EXPIRES || '86400');
+      const refreshToken = parseInt(process.env.JWT_REFRESH_TOKEN_EXPIRES || '86400');
+      console.log("accessToken: ", accessToken);
+
+      const accessTokenExp = accessToken; // 24h
+      const refreshTokenExp = refreshToken * 30; // 30 days
 
       // Store in Redis
       const now = Math.floor(Date.now() / 1000);

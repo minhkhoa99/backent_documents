@@ -28,17 +28,7 @@ export class StorageService {
                 },
             });
         } else {
-            this.bucketName = this.configService.get<string>('MINIO_BUCKET_NAME', 'edumarket');
-            // MinIO Configuration
-            this.s3Client = new S3Client({
-                region: this.configService.get<string>('MINIO_REGION', 'us-east-1'),
-                endpoint: this.configService.get<string>('MINIO_ENDPOINT', 'http://localhost:9000'),
-                forcePathStyle: true, // Required for MinIO
-                credentials: {
-                    accessKeyId: this.configService.get<string>('MINIO_ROOT_USER', 'admin'),
-                    secretAccessKey: this.configService.get<string>('MINIO_ROOT_PASSWORD', 'password'),
-                },
-            });
+            throw new InternalServerErrorException('AWS S3 Configuration is missing or incomplete. MinIO support has been removed.');
         }
     }
 
@@ -170,9 +160,7 @@ export class StorageService {
         if (awsRegion && this.configService.get<string>('AWS_S3_BUCKET')) {
             return `https://${this.bucketName}.s3.${awsRegion}.amazonaws.com/${fileName}`;
         }
-
-        const endpoint = this.configService.get<string>('MINIO_ENDPOINT', 'http://localhost:9000');
-        return `${endpoint}/${this.bucketName}/${fileName}`;
+        throw new InternalServerErrorException('AWS S3 Configuration incomplete for generating public URL.');
     }
 
     async getPresignedUrl(fileName: string): Promise<string> {

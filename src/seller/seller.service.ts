@@ -120,6 +120,10 @@ export class SellerService {
       }
     }
 
+    if (updateData.discountPercentage !== undefined) {
+      doc.discountPercentage = updateData.discountPercentage;
+    }
+
     return this.docsRepo.save(doc);
   }
 

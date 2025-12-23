@@ -90,10 +90,11 @@ export class DocumentsService {
   }
 
   async create(createDocumentDto: CreateDocumentDto, userId: string) {
-    const { price, categoryId, ...documentData } = createDocumentDto;
+    const { price, categoryId, discountPercentage, ...documentData } = createDocumentDto;
 
     const document = this.documentRepository.create({
       ...documentData,
+      discountPercentage: discountPercentage || 0,
       price: price ? { amount: price } : undefined,
       category: categoryId ? { id: categoryId } : undefined,
       author: { id: userId },
@@ -218,21 +219,53 @@ export class DocumentsService {
   }
 
   async update(id: string, updateDocumentDto: UpdateDocumentDto) {
-    const { price, categoryId, ...data } = updateDocumentDto;
-    const updateData: any = { ...data };
+    const { price, categoryId, discountPercentage, ...data } = updateDocumentDto;
+
+    // Fetch generic document to update relations if needed
+    const document = await this.documentRepository.findOne({
+      where: { id },
+      relations: ['price']
+    });
+
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
 
     if (price !== undefined) {
-      // Ideally we should update the Price entity, but for update() with relations it's tricky.
-      // Better to find one and save, or assume price entity exists.
-      // For simplicity in this demo, let's skip deep update via repo.update or handle it partially.
-      // We'll use save() strategy for full updates or just ignore price update in simplified version
-      // pending proper implementation.
-    }
-    if (categoryId) {
-      updateData.category = { id: categoryId };
+      // Update or Create Price
+      if (document.price) {
+        document.price.amount = price;
+        // You might need to inject PriceRepository to save strictly, 
+        // but cascading save from document should work if configured.
+        // However, typeorm update() does NOT trigger cascades usually.
+        // So we use save() for the whole document or query builder for relation.
+      } else {
+        // If price didn't exist (rare)
+        // document.price = new Price(); // Need Price entity import
+        // For now assuming price relation always exists or we skip
+      }
     }
 
-    return this.documentRepository.update(id, updateData);
+    // For simplicity and correctness with OneToOne updates, let's use save() strategy for everything
+    // or separate updates.
+
+    // Update direct fields
+    Object.assign(document, data);
+
+    if (discountPercentage !== undefined) {
+      document.discountPercentage = discountPercentage;
+    }
+
+    if (categoryId) {
+      document.category = { id: categoryId } as any;
+    }
+
+    if (price !== undefined && document.price) {
+      document.price.amount = price;
+    }
+
+    // Save should update relation due to cascade: true in Document
+    return this.documentRepository.save(document);
   }
 
   async updateStatus(id: string, status: DocumentStatus) {

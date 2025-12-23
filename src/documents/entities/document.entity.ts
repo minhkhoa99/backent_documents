@@ -62,4 +62,7 @@ export class Document {
 
     @OneToOne(() => Price, (price) => price.document, { cascade: true })
     price: Price;
+
+    @Column({ default: 0 })
+    discountPercentage: number;
 }

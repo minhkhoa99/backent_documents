@@ -24,4 +24,8 @@ export class CreateDocumentDto {
     @IsUrl()
     @IsOptional()
     avatar?: string;
+
+    @IsNumber()
+    @IsOptional()
+    discountPercentage?: number;
 }
