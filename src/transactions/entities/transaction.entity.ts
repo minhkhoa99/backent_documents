@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, Index } from 'typeorm';
 import { Wallet } from '../../wallets/entities/wallet.entity';
 import { Order } from '../../orders/entities/order.entity';
 
@@ -14,6 +14,7 @@ export class Transaction {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
+    @Index()
     @Column({
         type: 'enum',
         enum: TransactionType,
@@ -26,9 +27,11 @@ export class Transaction {
     @CreateDateColumn()
     createdAt: Date;
 
+    @Index()
     @ManyToOne(() => Wallet, { nullable: false })
     wallet: Wallet;
 
+    @Index()
     @ManyToOne(() => Order, { nullable: true })
     order: Order;
 }

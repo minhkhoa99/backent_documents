@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, Index } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { OrderItem } from './order-item.entity';
 
@@ -16,6 +16,7 @@ export class Order {
     @Column('decimal', { precision: 10, scale: 2 })
     totalAmount: number;
 
+    @Index()
     @Column({
         type: 'enum',
         enum: OrderStatus,
@@ -29,6 +30,7 @@ export class Order {
     @UpdateDateColumn()
     updatedAt: Date;
 
+    @Index()
     @ManyToOne(() => User, { nullable: false })
     user: User;
 

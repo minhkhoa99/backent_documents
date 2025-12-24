@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToOne } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToOne, Index } from 'typeorm';
 import { Wallet } from '../../wallets/entities/wallet.entity';
 
 export enum UserRole {
@@ -18,9 +18,11 @@ export class User {
     @Column() // Hashed password
     password?: string;
 
+    @Index()
     @Column()
     fullName: string;
 
+    @Index()
     @Column({ nullable: true })
     phone: string;
 

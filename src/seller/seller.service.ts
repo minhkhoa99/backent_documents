@@ -6,6 +6,7 @@ import { Document } from '../documents/entities/document.entity';
 import { OrderItem } from '../orders/entities/order-item.entity';
 import { InjectQueue } from '@nestjs/bull';
 import type { Queue } from 'bull';
+import { OrderStatus } from '../orders/entities/order.entity';
 
 @Injectable()
 export class SellerService {
@@ -18,27 +19,18 @@ export class SellerService {
   ) { }
 
   async getStats(sellerId: string) {
-    // Calculate total revenue, views (mock), downloads (count sales)
-    const items = await this.orderItemRepo.find({
-      where: {
-        document: {
-          author: { id: sellerId }
-        },
-        order: {
-          status: 'completed' as any // Use string if enum import is tricky or circular
-        }
-      },
-      relations: ['document', 'order', 'document.price']
-    });
+    // Optimized: Calculate stats in DB using aggregation
+    const result = await this.orderItemRepo.createQueryBuilder('orderItem')
+      .leftJoin('orderItem.document', 'document')
+      .leftJoin('orderItem.order', 'order')
+      .where('document.authorId = :sellerId', { sellerId })
+      .andWhere('order.status = :status', { status: OrderStatus.COMPLETED })
+      .select('SUM(orderItem.price)', 'totalRevenue')
+      .addSelect('COUNT(orderItem.id)', 'totalDownloads')
+      .getRawOne();
 
-    const totalRevenue = items.reduce((acc, item) => {
-      const price = item.price || 0; // Stored price at time of purchase?
-      // Wait, OrderItem usually stores the price at purchase.
-      // Let's check OrderItem entity.
-      return acc + Number(price);
-    }, 0);
-
-    const totalDownloads = items.length;
+    const totalRevenue = parseFloat(result.totalRevenue) || 0;
+    const totalDownloads = parseInt(result.totalDownloads) || 0;
 
     return {
       totalRevenue,
@@ -64,6 +56,8 @@ export class SellerService {
   }
 
   async getOrders(sellerId: string) {
+    // Optimized: Select specific fields and relations.
+    // Assuming we just need basic order info.
     return this.orderItemRepo.find({
       where: {
         document: {
@@ -71,6 +65,25 @@ export class SellerService {
         }
       },
       relations: ['document', 'order', 'order.user'],
+      select: {
+        id: true,
+        price: true,
+        document: {
+          id: true,
+          title: true,
+          fileUrl: true
+        },
+        order: {
+          id: true,
+          status: true,
+          createdAt: true,
+          user: {
+            id: true,
+            fullName: true,
+            email: true
+          }
+        }
+      },
       order: {
         order: {
           createdAt: 'DESC'

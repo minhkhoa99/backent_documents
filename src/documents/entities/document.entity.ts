@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToOne } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToOne, Index } from 'typeorm';
 import { Category } from '../../categories/entities/category.entity';
 import { User } from '../../users/entities/user.entity';
 import { Price } from './price.entity';
@@ -10,10 +10,12 @@ export enum DocumentStatus {
 }
 
 @Entity('documents')
+@Index(['isDeleted', 'isActive', 'status'])
 export class Document {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
+    @Index()
     @Column()
     title: string;
 
@@ -45,12 +47,14 @@ export class Document {
     @Column({ default: true })
     isActive: boolean;
 
+    @Index()
     @CreateDateColumn()
     createdAt: Date;
 
     @UpdateDateColumn()
     updatedAt: Date;
 
+    @Index()
     @Column({ default: 0 })
     views: number;
 
@@ -63,6 +67,7 @@ export class Document {
     @OneToOne(() => Price, (price) => price.document, { cascade: true })
     price: Price;
 
+    @Index()
     @Column({ default: 0 })
     discountPercentage: number;
 }

@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bull';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './users/users.module';
@@ -16,6 +18,7 @@ import { CartModule } from './cart/cart.module';
 import { MenusModule } from './menus/menus.module';
 import { SellerModule } from './seller/seller.module';
 import { ContentBlocksModule } from './content-blocks/content-blocks.module';
+import { RedisModule } from './common/redis/redis.module';
 
 
 
@@ -35,9 +38,17 @@ import { ContentBlocksModule } from './content-blocks/content-blocks.module';
         database: configService.get<string>('POSTGRES_DB', 'document_site'),
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
         synchronize: true, // Dev mode: auto-sync schema
+        extra: {
+          max: 20, // Connection pool size
+          connectionTimeoutMillis: 2000,
+        },
       }),
       inject: [ConfigService],
     }),
+    ThrottlerModule.forRoot([{
+      ttl: 60000, // 1 minute
+      limit: 100, // 100 requests per minute
+    }]),
     BullModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -59,11 +70,19 @@ import { ContentBlocksModule } from './content-blocks/content-blocks.module';
     CartModule,
     MenusModule,
     SellerModule,
+    SellerModule,
     ContentBlocksModule,
+    RedisModule,
 
 
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule { }

@@ -4,12 +4,17 @@ import { Repository, IsNull } from 'typeorm';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { Category } from './entities/category.entity';
+import { RedisService } from '../common/redis/redis.service';
 
 @Injectable()
 export class CategoriesService {
+  private readonly CACHE_KEY_TREE = 'categories:tree';
+  private readonly CACHE_KEY_ALL = 'categories:all';
+
   constructor(
     @InjectRepository(Category)
     private categoryRepository: Repository<Category>,
+    private redisService: RedisService,
   ) { }
 
   async create(createCategoryDto: CreateCategoryDto) {
@@ -22,15 +27,25 @@ export class CategoriesService {
       createCategoryDto.order = lastItem ? lastItem.order + 1 : 1;
     }
     const category = this.categoryRepository.create(createCategoryDto);
-    return this.categoryRepository.save(category);
+    const result = await this.categoryRepository.save(category);
+    await this.invalidateCache();
+    return result;
   }
 
-  findAll() {
-    return this.categoryRepository.find({ relations: ['parent'] });
+  async findAll() {
+    const cached = await this.redisService.get(this.CACHE_KEY_ALL);
+    if (cached) return cached;
+
+    const result = await this.categoryRepository.find({ relations: ['parent'] });
+    await this.redisService.set(this.CACHE_KEY_ALL, result, 3600); // Cache for 1 hour
+    return result;
   }
 
-  getTree() {
-    return this.categoryRepository.find({
+  async getTree() {
+    const cached = await this.redisService.get(this.CACHE_KEY_TREE);
+    if (cached) return cached;
+
+    const result = await this.categoryRepository.find({
       where: { parent: IsNull() },
       relations: ['children'],
       order: {
@@ -38,14 +53,18 @@ export class CategoriesService {
         name: 'ASC',
       }
     });
+    await this.redisService.set(this.CACHE_KEY_TREE, result, 3600); // Cache for 1 hour
+    return result;
   }
 
   findOne(id: string) {
     return this.categoryRepository.findOne({ where: { id } });
   }
 
-  update(id: string, updateCategoryDto: UpdateCategoryDto) {
-    return this.categoryRepository.update(id, updateCategoryDto);
+  async update(id: string, updateCategoryDto: UpdateCategoryDto) {
+    const result = await this.categoryRepository.update(id, updateCategoryDto);
+    await this.invalidateCache();
+    return result;
   }
 
   async reorder(items: { id: string; order: number }[]) {
@@ -54,10 +73,23 @@ export class CategoriesService {
         await transactionalEntityManager.update(Category, item.id, { order: item.order });
       }
     });
+    await this.invalidateCache();
     return { success: true };
   }
 
   async seed() {
+    // Seed logic remains same, but maybe add invalidation at the end
+    // Original seed logic...
+    // For brevity, keeping original seed logic but we should invalidate cache at the end.
+    // Since seed is large function, I will just call invalidate at start or end.
+    // Re-implementing seed logic to ensure no code loss or just wrapping existing?
+    // "seed" function in original code was ~60 lines. I should probably copy it back or leave it if untouched.
+    // Wait, replacement content must REPLACE target content. I selected the WHOLE file content to replace?
+    // No, I need to be careful. The user tool says "StartLine" and "EndLine".
+    // I should only replace the class body or specific methods to avoid copy-pasting the whole seed function again if I can avoid it.
+    // But the imports changed too.
+    // I will replace the whole file for safety to ensure imports and class members are consistent.
+
     const levels = [
       {
         name: 'Tiểu học',
@@ -121,6 +153,7 @@ export class CategoriesService {
         childOrder++;
       }
     }
+    await this.invalidateCache();
     return { message: 'Seeding completed' };
   }
 
@@ -137,8 +170,10 @@ export class CategoriesService {
       .replace(/-+$/, '');
   }
 
-  remove(id: string) {
-    return this.categoryRepository.delete(id);
+  async remove(id: string) {
+    const result = await this.categoryRepository.delete(id);
+    await this.invalidateCache();
+    return result;
   }
 
   async updateAutoIncrement() {
@@ -163,6 +198,12 @@ export class CategoriesService {
         await this.categoryRepository.save(child);
       }
     }
+    await this.invalidateCache();
     return { message: 'Auto-increment updated' };
+  }
+
+  private async invalidateCache() {
+    await this.redisService.del(this.CACHE_KEY_TREE);
+    await this.redisService.del(this.CACHE_KEY_ALL);
   }
 }

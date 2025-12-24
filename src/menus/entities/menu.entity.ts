@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
 @Entity('menus')
 export class Menu {
@@ -14,6 +14,7 @@ export class Menu {
     @Column({ nullable: true })
     icon: string;
 
+    @Index()
     @Column({ default: 0 })
     order: number;
 

@@ -4,12 +4,17 @@ import { Repository, IsNull } from 'typeorm';
 import { CreateMenuDto } from './dto/create-menu.dto';
 import { UpdateMenuDto } from './dto/update-menu.dto';
 import { Menu } from './entities/menu.entity';
+import { RedisService } from '../common/redis/redis.service';
 
 @Injectable()
 export class MenusService {
+  private readonly CACHE_KEY_TREE = 'menus:tree';
+  private readonly CACHE_KEY_ALL = 'menus:all';
+
   constructor(
     @InjectRepository(Menu)
     private menuRepository: Repository<Menu>,
+    private redisService: RedisService,
   ) { }
 
   async create(createMenuDto: CreateMenuDto) {
@@ -31,7 +36,9 @@ export class MenusService {
         ...rest,
         parent: parentId ? { id: parentId } : undefined,
       });
-      return await this.menuRepository.save(menu);
+      const result = await this.menuRepository.save(menu);
+      await this.invalidateCache();
+      return result;
     } catch (error) {
       console.error('Error creating menu:', error);
       console.error('Input DTO:', createMenuDto);
@@ -39,18 +46,28 @@ export class MenusService {
     }
   }
 
-  findAll() {
-    return this.menuRepository.find({ relations: ['parent'] });
+  async findAll() {
+    const cached = await this.redisService.get(this.CACHE_KEY_ALL);
+    if (cached) return cached;
+
+    const result = await this.menuRepository.find({ relations: ['parent'] });
+    await this.redisService.set(this.CACHE_KEY_ALL, result, 3600);
+    return result;
   }
 
-  getTree() {
-    return this.menuRepository.find({
+  async getTree() {
+    const cached = await this.redisService.get(this.CACHE_KEY_TREE);
+    if (cached) return cached;
+
+    const result = await this.menuRepository.find({
       where: { parent: IsNull(), isActive: true },
       relations: ['children'],
       order: {
         order: 'ASC',
       },
     });
+    await this.redisService.set(this.CACHE_KEY_TREE, result, 3600);
+    return result;
   }
 
   findOne(id: string) {
@@ -70,11 +87,15 @@ export class MenusService {
       throw new Error(`Menu #${id} not found`);
     }
 
-    return this.menuRepository.save(menu);
+    const result = await this.menuRepository.save(menu);
+    await this.invalidateCache();
+    return result;
   }
 
-  remove(id: string) {
-    return this.menuRepository.delete(id);
+  async remove(id: string) {
+    const result = await this.menuRepository.delete(id);
+    await this.invalidateCache();
+    return result;
   }
 
   async reorder(items: { id: string; order: number }[]) {
@@ -85,6 +106,7 @@ export class MenusService {
         await transactionalEntityManager.update(Menu, item.id, { order: item.order });
       }
     });
+    await this.invalidateCache();
     return { success: true };
   }
 
@@ -101,6 +123,7 @@ export class MenusService {
       await this.menuRepository.save(root);
       await this.updateChildrenOrder(root);
     }
+    await this.invalidateCache();
     return { message: 'Menu Auto-increment updated' };
   }
 
@@ -248,6 +271,12 @@ export class MenusService {
       }
       await this.menuRepository.save(menu);
     }
+    await this.invalidateCache();
     return { message: 'Menu seeded' };
+  }
+
+  private async invalidateCache() {
+    await this.redisService.del(this.CACHE_KEY_TREE);
+    await this.redisService.del(this.CACHE_KEY_ALL);
   }
 }

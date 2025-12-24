@@ -37,8 +37,38 @@ export class StorageService {
         const baseName = uuidv4();
         const fileName = `${baseName}${fileExtension}`;
 
-        // Always upload original
-        const originalPath = await this.uploadBuffer(file.buffer, fileName, file.mimetype);
+        // Always upload original but Compress it if it's an image
+        let uploadBuffer = file.buffer;
+        let uploadContentType = file.mimetype;
+
+        if (['jpg', 'jpeg', 'png', 'webp'].includes(fileExtension.replace('.', ''))) {
+            try {
+                // Compress image
+                uploadBuffer = await sharp(file.buffer)
+                    .jpeg({ quality: 80, mozjpeg: true }) // Convert to efficient JPEG or keep original format with compression
+                    // For simplicity, let's keep original format or standardizing to jpeg/webp is better? 
+                    // Let's standardise to JPEG for strictly 'images' or just compress based on input.
+                    // Safer: use .toFormat(format, { quality: 80 })
+                    .toBuffer();
+
+                // Note: If we change format to webp/jpeg, we should update extension/mimetype. 
+                // For now, let's just compress generic JPEG which is most common for documents previews.
+                // Or better: just strict compression without format change unless requested.
+                // Re-implementation:
+                if (fileExtension.includes('png')) {
+                    uploadBuffer = await sharp(file.buffer).png({ quality: 80, compressionLevel: 8 }).toBuffer();
+                } else if (fileExtension.includes('webp')) {
+                    uploadBuffer = await sharp(file.buffer).webp({ quality: 80 }).toBuffer();
+                } else {
+                    uploadBuffer = await sharp(file.buffer).jpeg({ quality: 80, mozjpeg: true }).toBuffer();
+                }
+                console.log(`Image Compressed: ${fileName}`);
+            } catch (error) {
+                console.warn('Image compression failed, uploading original', error);
+            }
+        }
+
+        const originalPath = await this.uploadBuffer(uploadBuffer, fileName, uploadContentType);
 
         // Process resizing if config is present and file is an image
         if (configThumString && ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(fileExtension.replace('.', ''))) {

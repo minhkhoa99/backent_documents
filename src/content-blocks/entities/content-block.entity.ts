@@ -1,5 +1,5 @@
 
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
 export enum ContentBlockType {
     LATEST = 'LATEST',
@@ -23,9 +23,11 @@ export class ContentBlock {
     })
     type: ContentBlockType;
 
+    @Index()
     @Column('int', { default: 0 })
     order: number;
 
+    @Index()
     @Column({ default: true })
     isVisible: boolean;
 
